@@ -8,6 +8,7 @@ import {
   useWizardContext,
   Wizard,
   WizardFooterWrapper,
+  WizardNav,
   WizardNavItem,
   WizardStep,
 } from '@patternfly/react-core';
@@ -389,6 +390,62 @@ const CreateImageWizard = ({ isEdit }: CreateImageWizardProps) => {
     );
   };
 
+  // Custom nav item for parent steps (like "Optional steps") to fix PatternFly bug
+  // where clicking on a parent step with a hidden first sub-step causes a crash.
+  // This function correctly finds the first *visible* sub-step to navigate to.
+  const OptionalStepsNavItem = (
+    step: WizardStepType,
+    activeStep: WizardStepType,
+    steps: WizardStepType[],
+    goToStepByIndex: (index: number) => void
+  ) => {
+    // Find all sub-steps belonging to this parent step
+    const subSteps = steps.filter(
+      (s) => 'parentId' in s && s.parentId === step.id
+    );
+
+    // Find the first visible sub-step (fixes PatternFly bug with hidden first sub-step)
+    const firstVisibleSubStep = subSteps.find((s) => !s.isHidden);
+    const firstVisibleSubStepIndex = firstVisibleSubStep?.index;
+
+    // Check if any sub-step is currently active
+    const hasActiveChild = subSteps.some((s) => activeStep?.id === s.id);
+
+    // Check if there are any enabled (visible and not disabled) children
+    const hasEnabledChildren = subSteps.some((s) => !s.isHidden && !s.isDisabled);
+
+    // Render sub-step nav items using the existing CustomStatusNavItem
+    const subNavItems = subSteps.map((subStep) => {
+      if (subStep.isHidden) {
+        return null;
+      }
+      return CustomStatusNavItem(subStep, activeStep, steps, goToStepByIndex);
+    });
+
+    return (
+      <WizardNavItem
+        key={step.id}
+        id={step.id}
+        content={step.name}
+        isExpandable
+        isCurrent={hasActiveChild}
+        isDisabled={!hasEnabledChildren || firstVisibleSubStepIndex === undefined}
+        isVisited={step.isVisited || false}
+        stepIndex={firstVisibleSubStepIndex ?? 1}
+        onClick={() => {
+          if (firstVisibleSubStepIndex !== undefined) {
+            goToStepByIndex(firstVisibleSubStepIndex);
+          }
+        }}
+        status={step.status || 'default'}
+      >
+        <WizardNav isExpanded aria-label="Optional steps sub-steps" isInnerList>
+          {subNavItems}
+        </WizardNav>
+      </WizardNavItem>
+    );
+  };
+
   return (
     <>
       <ImageBuilderHeader inWizard />
@@ -483,6 +540,7 @@ const CreateImageWizard = ({ isEdit }: CreateImageWizardProps) => {
           <WizardStep
             name='Optional steps'
             id='step-optional-steps'
+            navItem={OptionalStepsNavItem}
             steps={[
               <WizardStep
                 name='Register'
